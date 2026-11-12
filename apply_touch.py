@@ -171,32 +171,42 @@ PAL_JSHandleEvent(
 
    if (lpEvent->type == SDL_MOUSEBUTTONDOWN)
    {
+      double sdx = mx - g_dJSCX;
+      double sdy = my - g_dJSCY;
+
       //
-      // 左半屏 -> 摇杆；右半屏 -> 按钮
+      // 只在摇杆圆范围内接管（半径 1.6 倍，宽松一点好按）
       //
-      if (mx < g_dJSCX + g_dJSR * 2.4)
+      if (sqrt(sdx * sdx + sdy * sdy) <= g_dJSR * 1.6)
       {
          g_fStickActive = TRUE;
-         g_dStickDX = mx - g_dJSCX;
-         g_dStickDY = my - g_dJSCY;
-         PAL_JSApplyDirection(g_dStickDX, g_dStickDY);
+         g_dStickDX = sdx;
+         g_dStickDY = sdy;
+         PAL_JSApplyDirection(sdx, sdy);
          return TRUE;
       }
 
+      //
+      // 按钮圆范围内接管
+      //
       for (i = 0; i < JS_BTN_COUNT; i++)
       {
          double dx = mx - g_dJSBtn[i][0];
          double dy = my - g_dJSBtn[i][1];
          double d  = sqrt(dx * dx + dy * dy);
 
-         if (d < g_dJSBtn[i][2] * 1.45)
+         if (d < g_dJSBtn[i][2] * 1.35)
          {
             g_iPressedButton = i;
             PAL_JSButtonDown(i);
             return TRUE;
          }
       }
-      return TRUE;
+
+      //
+      // 其他区域不接管，交回原有逻辑（菜单、音量等）
+      //
+      return FALSE;
    }
 
    if (lpEvent->type == JS_EV_MOTION)
@@ -280,7 +290,7 @@ PAL_JS_MakeCircle(
          double dx = (x - iSize / 2.0) / (iSize / 2.0);
          double dy = (y - iSize / 2.0) / (iSize / 2.0);
          double d  = sqrt(dx * dx + dy * dy);
-         BOOL   fSet = fFilled ? (d <= 0.98) : (d <= 1.0 && d >= 0.80);
+         BOOL   fSet = fFilled ? (d <= 0.98) : (d <= 1.0 && d >= 0.62);
 
          if (fSet)
          {
@@ -318,9 +328,9 @@ PAL_JS_DrawOverlay(
 
    if (!g_fJSOverlayReady)
    {
-      gpJSBaseTex = PAL_JS_MakeCircle(256, 255, 255, 255, 90, FALSE);
-      gpJSKnobTex = PAL_JS_MakeCircle(128, 255, 255, 255, 150, TRUE);
-      gpJSBtnTex  = PAL_JS_MakeCircle(128, 255, 255, 255, 110, FALSE);
+      gpJSBaseTex = PAL_JS_MakeCircle(256, 255, 255, 255, 165, FALSE);
+      gpJSKnobTex = PAL_JS_MakeCircle(128, 255, 255, 255, 215, TRUE);
+      gpJSBtnTex  = PAL_JS_MakeCircle(128, 255, 255, 255, 175, FALSE);
       g_fJSOverlayReady = TRUE;
    }
 
@@ -452,6 +462,17 @@ def main():
     # ---------- video.c ----------
     text = read('video.c')
     if MARKER_VIDEO not in text:
+        # 关掉老的 BMP 覆盖层（Y/X/B/A 箭头图），改用运行时摇杆
+        overlay_anchor = 'if (gConfig.fUseTouchOverlay)\n   {\n      extern const unsigned char bmpData[];'
+        if 'gConfig.fUseTouchOverlay = FALSE;' not in text:
+            oi = text.find(overlay_anchor)
+            if oi < 0:
+                raise SystemExit('video.c: overlay creation block not found')
+            line_start = text.rfind('\n', 0, oi) + 1
+            text = (text[:line_start]
+                    + '   gConfig.fUseTouchOverlay = FALSE; /* patched: runtime joystick replaces BMP overlay */\n'
+                    + text[line_start:])
+
         anchor = 'VOID\nVIDEO_UpdateScreen('
         idx = text.find(anchor)
         if idx < 0:
@@ -462,7 +483,7 @@ def main():
         idx2 = text.find(anchor2)
         if idx2 < 0:
             raise SystemExit('video.c: SDL_RenderPresent not found')
-        draw = '\tif (gConfig.fUseTouchOverlay) PAL_JS_DrawOverlay();\n\t'
+        draw = '\tPAL_JS_DrawOverlay();\n\t'
         text = text[:idx2] + draw + text[idx2:]
         write('video.c', text)
         print('  patched video.c')
