@@ -323,6 +323,17 @@ PAL_JS_DrawOverlay(
 
    if (!g_fJSLayoutReady)
    {
+      int w = 0, h = 0;
+
+      if (SDL_GetRendererOutputSize(gpRenderer, &w, &h) == 0 && w > 0 && h > 0)
+      {
+         PAL_GetTouchLayout(w, h, &g_dJSCX, &g_dJSCY, &g_dJSR, g_dJSBtn);
+         g_fJSLayoutReady = TRUE;
+      }
+   }
+
+   if (!g_fJSLayoutReady)
+   {
       return;
    }
 
