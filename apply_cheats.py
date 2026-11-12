@@ -249,15 +249,23 @@ def main():
         print('  skip text.c')
 
     # 3) uigame.c: system menu item
+    #    NOTE: 必须放在 #if !defined(PAL_CLASSIC) 块外面，
+    #    否则 PAL_CLASSIC 构建（iOS 就是）会把这一项一起编译掉。
     text = read('uigame.c')
     if 'CHEAT_WORD_BASE + 10' not in text:
-        anchor = '{ 6,      SYSMENU_LABEL_BATTLEMODE,    TRUE,     PAL_XY(53, 72 + 90) },'
-        idx = text.find(anchor)
+        marker = '#endif\n   };'
+        idx = text.find(marker)
         if idx < 0:
-            raise SystemExit('uigame.c: battlemode menu item not found')
-        end = idx + len(anchor)
-        add = '\n      { 7,      CHEAT_WORD_BASE + 10,        TRUE,     PAL_XY(53, 72 + 108) },'
-        text = text[:end] + add + text[end:]
+            raise SystemExit('uigame.c: end of rgSystemMenuItem array not found')
+        pos = idx + len('#endif\n')
+        add = (
+            '#if !defined(PAL_CLASSIC)\n'
+            '      { 7,      CHEAT_WORD_BASE + 10,        TRUE,     PAL_XY(53, 72 + 108) },\n'
+            '#else\n'
+            '      { 7,      CHEAT_WORD_BASE + 10,        TRUE,     PAL_XY(53, 72 + 90) },\n'
+            '#endif\n'
+        )
+        text = text[:pos] + add + text[pos:]
         write('uigame.c', text)
         print('  patched uigame.c (menu item)')
     else:
