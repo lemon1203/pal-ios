@@ -23,6 +23,8 @@ BOOL g_fCheatNoEncounter = FALSE;
 #define CHEAT_LABEL_SLOTS  16
 static WCHAR g_rgCheatWide[CHEAT_LABEL_SLOTS][48];
 
+static VOID PAL_CheatRefreshLabels(VOID);
+
 static VOID
 PAL_CheatSetLabel(
    int         iOffset,
@@ -49,6 +51,14 @@ PAL_CheatGetWord(
    int         iOffset
 )
 {
+   static BOOL fLabelsReady = FALSE;
+
+   if (!fLabelsReady)
+   {
+      PAL_CheatRefreshLabels();
+      fLabelsReady = TRUE;
+   }
+
    if (iOffset < 0 || iOffset >= CHEAT_LABEL_SLOTS)
    {
       return L"";
