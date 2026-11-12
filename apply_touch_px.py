@@ -259,7 +259,7 @@ def main():
         '/* pixel joystick overlay prototype (patched) */\n'
         'void PAL_JS_DrawHudPixels(Uint8 *buf, int pitch, int texW, int texH, int winW, int winH);\n\n'
     )
-    anchor_rc = 'VIDEO_RenderCopy(\n   VOID\n)'
+    anchor_rc = 'VOID\nVIDEO_RenderCopy('
     ridx = text.find(anchor_rc)
     if ridx < 0:
         raise SystemExit('video.c: 找不到 VIDEO_RenderCopy 定义')
