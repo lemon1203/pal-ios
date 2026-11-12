@@ -179,59 +179,56 @@ PAL_JS_DrawHudPixels(
       g_dJSTexScaleY = (double)texH / (double)winH;
    }
 
-   /* 布局按游戏画面矩形算，再平移到纹理坐标，避免画到黑边上 */
-   if (!g_fJSLayoutReady)
+   /* 布局用窗口坐标算（v15 已验证可行），绘制时再缩放到纹理空间 */
+   if (!g_fJSLayoutReady && winW > 0 && winH > 0)
    {
-      int gw = gTextureRect.w;
-      int gh = gTextureRect.h;
-
-      if (gw <= 0 || gh <= 0)
-      {
-         gw = texW;
-         gh = texH;
-      }
-
-      PAL_GetTouchLayout(gw, gh, &g_dJSCX, &g_dJSCY, &g_dJSR, g_dJSBtn);
-
-      g_dJSCX += gTextureRect.x;
-      g_dJSCY += gTextureRect.y;
-      for (i = 0; i < 4; i++)
-      {
-         g_dJSBtn[i][0] += gTextureRect.x;
-         g_dJSBtn[i][1] += gTextureRect.y;
-      }
+      PAL_GetTouchLayout(winW, winH, &g_dJSCX, &g_dJSCY, &g_dJSR, g_dJSBtn);
       g_fJSLayoutReady = TRUE;
    }
 
-   /* 摇杆：无填充（完全透出场景）+ 较亮的细白环，同暗黑2 */
-   JS_Ring(buf, pitch, texW, texH, g_dJSCX, g_dJSCY, g_dJSR,
-           g_dJSR * 0.045 + 0.9, 255, 255, 255, 150);
-
-   /* 摇杆头：小半透明白点 */
-   kx = g_dJSCX + (g_fStickActive ? g_dStickDX : 0.0);
-   ky = g_dJSCY + (g_fStickActive ? g_dStickDY : 0.0);
-   JS_Disc(buf, pitch, texW, texH, kx, ky, g_dJSR * 0.30, 255, 255, 255, 120);
-
-   /* 按钮：无填充 + 细白环；按下才出现淡淡的底 */
-   for (i = 0; i < 4; i++)
+   if (!g_fJSLayoutReady)
    {
-      double bx = g_dJSBtn[i][0];
-      double by = g_dJSBtn[i][1];
-      double br = g_dJSBtn[i][2];
-      int    aF = (g_iPressedButton == i) ? 55 : 0;
-      int    aR = (g_iPressedButton == i) ? 200 : 150;
+      return;
+   }
 
-      if (aF > 0)
-      {
-         JS_Disc(buf, pitch, texW, texH, bx, by, br, 0, 0, 0, aF);
-      }
-      JS_Ring(buf, pitch, texW, texH, bx, by, br, br * 0.06 + 0.9, 255, 255, 255, aR);
+   {
+      double s  = (winW > 0) ? ((double)texW / (double)winW) : 1.0;
+      double cx = g_dJSCX * s;
+      double cy = g_dJSCY * s;
+      double rr = g_dJSR * s;
+      double kx2, ky2;
 
-      if (i == 1 && br > 5.0)
+      /* 摇杆：无填充 + 较亮的细白环，同暗黑2 */
+      JS_Ring(buf, pitch, texW, texH, cx, cy, rr, rr * 0.045 + 0.9, 255, 255, 255, 150);
+
+      /* 摇杆头：小半透明白点 */
+      kx2 = cx + (g_fStickActive ? g_dStickDX * s : 0.0);
+      ky2 = cy + (g_fStickActive ? g_dStickDY * s : 0.0);
+      JS_Disc(buf, pitch, texW, texH, kx2, ky2, rr * 0.30, 255, 255, 255, 120);
+
+      /* 按钮：无填充 + 细白环；按下才出现淡淡的底 */
+      for (i = 0; i < 4; i++)
       {
-         JS_Hamburger(buf, pitch, texW, texH, bx, by, br, 255, 255, 255, 150);
+         double bx = g_dJSBtn[i][0] * s;
+         double by = g_dJSBtn[i][1] * s;
+         double br = g_dJSBtn[i][2] * s;
+         int    aF = (g_iPressedButton == i) ? 55 : 0;
+         int    aR = (g_iPressedButton == i) ? 200 : 150;
+
+         if (aF > 0)
+         {
+            JS_Disc(buf, pitch, texW, texH, bx, by, br, 0, 0, 0, aF);
+         }
+         JS_Ring(buf, pitch, texW, texH, bx, by, br, br * 0.06 + 0.9, 255, 255, 255, aR);
+
+         if (i == 1 && br > 5.0)
+         {
+            JS_Hamburger(buf, pitch, texW, texH, bx, by, br, 255, 255, 255, 150);
+         }
       }
    }
+   (void)kx;
+   (void)ky;
 }
 /* ===== end pixel joystick overlay ===== */
 '''
