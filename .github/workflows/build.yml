@@ -1,0 +1,76 @@
+name: Build SDLPAL iOS
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout SDLPAL (含子模块)
+        uses: actions/checkout@v4
+        with:
+          repository: sdlpal/sdlpal
+          ref: master
+          submodules: recursive
+          fetch-depth: 1
+          path: sdlpal
+
+      - name: 显示工具链版本
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: 安装 CocoaPods 依赖
+        working-directory: sdlpal/ios/SDLPal
+        run: |
+          pod --version || gem install cocoapods --no-document
+          pod install --repo-update
+
+      - name: 编译 (无签名, arm64)
+        working-directory: sdlpal/ios/SDLPal
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -workspace SDLPal.xcworkspace \
+            -scheme SDLPal \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            ENABLE_BITCODE=NO \
+            build 2>&1 | tee build.log
+
+      - name: 打包成 ipa
+        run: |
+          APP_PATH=$(find sdlpal/ios/SDLPal/build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+          echo "APP_PATH=$APP_PATH"
+          if [ -z "$APP_PATH" ]; then echo "没找到 .app，构建失败"; exit 1; fi
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry SDLPAL.ipa Payload
+          ls -lh SDLPAL.ipa
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: SDLPAL-ipa
+          path: SDLPAL.ipa
+          retention-days: 30
+
+      - name: 失败时也上传日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: sdlpal/ios/SDLPal/build.log
+          retention-days: 7
