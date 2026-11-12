@@ -2,9 +2,9 @@
 """
 给 SDLPAL 换成现代触屏操作：左下虚拟摇杆 + 右下 4 个圆钮。
 
-- 摇杆：固定左下角，推杆决定 4 个方向（游戏本身只有 4 向）
-- 按钮：A=确认/调查  B=菜单/取消  C=战斗自动 / 场景用道具  D=战斗防御
-- 绘制：运行时用 SDL 生成圆形纹理，不依赖 BMP 覆盖层
+- 布局在 PAL_SetTouchBounds() 里用窗口尺寸算好，存全局；
+- 绘制用 SDL 运行时生成的圆形纹理（适配 SDL2/SDL3）；
+- 摇杆：4 向 + 30% 死区；按钮：确认/菜单/自动或道具/防御。
 
 用法: python3 apply_touch.py <sdlpal 源码根目录>
 """
@@ -27,9 +27,9 @@ double g_dStickDX      = 0.0;
 double g_dStickDY      = 0.0;
 int   g_iPressedButton = -1;
 
-static BOOL   g_fJSHooked = FALSE;
-static double g_dJSCX = 0.0, g_dJSCY = 0.0, g_dJSR = 0.0;
-static double g_dJSBtn[4][3];   // x, y, r
+double g_dJSCX = 0.0, g_dJSCY = 0.0, g_dJSR = 0.0;
+double g_dJSBtn[4][3];
+BOOL   g_fJSLayoutReady = FALSE;
 
 //
 // 计算布局：摇杆在左下，四个按钮在右下
@@ -52,13 +52,13 @@ PAL_GetTouchLayout(
    double dMarginX = dBtnR * 1.7;
    double dMarginY = dBtnR * 1.7;
 
-   if (pdStickR) *pdStickR = dR;
+   if (pdStickR)  *pdStickR  = dR;
    if (pdStickCX) *pdStickCX = dR * 1.35;
    if (pdStickCY) *pdStickCY = dH - dR * 1.35;
 
-   rgBtn[0][0] = dW - dMarginX;              rgBtn[0][1] = dH - dMarginY;              rgBtn[0][2] = dBtnR;
-   rgBtn[1][0] = dW - dMarginX - dBtnR * 2.6; rgBtn[1][1] = dH - dMarginY;              rgBtn[1][2] = dBtnR;
-   rgBtn[2][0] = dW - dMarginX;              rgBtn[2][1] = dH - dMarginY - dBtnR * 2.6; rgBtn[2][2] = dBtnR;
+   rgBtn[0][0] = dW - dMarginX;               rgBtn[0][1] = dH - dMarginY;               rgBtn[0][2] = dBtnR;
+   rgBtn[1][0] = dW - dMarginX - dBtnR * 2.6; rgBtn[1][1] = dH - dMarginY;               rgBtn[1][2] = dBtnR;
+   rgBtn[2][0] = dW - dMarginX;               rgBtn[2][1] = dH - dMarginY - dBtnR * 2.6; rgBtn[2][2] = dBtnR;
    rgBtn[3][0] = dW - dMarginX - dBtnR * 2.6; rgBtn[3][1] = dH - dMarginY - dBtnR * 2.6; rgBtn[3][2] = dBtnR;
 }
 
@@ -145,8 +145,7 @@ PAL_JSHandleEvent(
 )
 {
    double mx, my;
-   int    i, w, h;
-   double best;
+   int    i;
 
    if (lpEvent->type != SDL_MOUSEBUTTONDOWN &&
        lpEvent->type != SDL_MOUSEBUTTONUP &&
@@ -155,17 +154,9 @@ PAL_JSHandleEvent(
       return FALSE;
    }
 
-   if (!g_fJSHooked)
+   if (!g_fJSLayoutReady)
    {
-      if (SDL_GetRendererOutputSize(gpRenderer, &w, &h) == 0)
-      {
-         PAL_GetTouchLayout(w, h, &g_dJSCX, &g_dJSCY, &g_dJSR, g_dJSBtn);
-         g_fJSHooked = TRUE;
-      }
-      else
-      {
-         return FALSE;
-      }
+      return FALSE;
    }
 
    mx = (lpEvent->type == SDL_MOUSEMOTION) ? lpEvent->motion.x : lpEvent->button.x;
@@ -185,14 +176,13 @@ PAL_JSHandleEvent(
          return TRUE;
       }
 
-      best = g_dJSBtn[0][2] * 1.45;
       for (i = 0; i < JS_BTN_COUNT; i++)
       {
          double dx = mx - g_dJSBtn[i][0];
          double dy = my - g_dJSBtn[i][1];
-         double d = sqrt(dx * dx + dy * dy);
+         double d  = sqrt(dx * dx + dy * dy);
 
-         if (d < g_dJSBtn[i][2] * 1.45 && d < best * 1.45)
+         if (d < g_dJSBtn[i][2] * 1.45)
          {
             g_iPressedButton = i;
             PAL_JSButtonDown(i);
@@ -262,44 +252,43 @@ PAL_JS_MakeCircle(
 )
 {
    SDL_Surface *surf;
-   Uint32      color;
-   int         x, y;
    SDL_Texture *tex;
+   int          x, y;
 
    surf = SDL_CreateRGBSurfaceWithFormat(0, iSize, iSize, 32, SDL_PIXELFORMAT_RGBA32);
-   if (surf == NULL) return NULL;
+   if (surf == NULL)
+   {
+      return NULL;
+   }
 
-   SDL_FillRect(surf, NULL, SDL_MapRGBA(surf->format, 0, 0, 0, 0));
+   SDL_LockSurface(surf);
+   memset(surf->pixels, 0, (size_t)surf->pitch * (size_t)iSize);
 
    for (y = 0; y < iSize; y++)
    {
+      Uint8 *row = (Uint8 *)surf->pixels + (size_t)y * (size_t)surf->pitch;
+
       for (x = 0; x < iSize; x++)
       {
          double dx = (x - iSize / 2.0) / (iSize / 2.0);
          double dy = (y - iSize / 2.0) / (iSize / 2.0);
          double d  = sqrt(dx * dx + dy * dy);
+         BOOL   fSet = fFilled ? (d <= 0.98) : (d <= 1.0 && d >= 0.80);
 
-         if (fFilled)
+         if (fSet)
          {
-            if (d <= 0.98)
-            {
-               color = SDL_MapRGBA(surf->format, r, g, b, a);
-               ((Uint32 *)((Uint8 *)surf->pixels + y * surf->pitch))[x] = color;
-            }
-         }
-         else
-         {
-            if (d <= 1.0 && d >= 0.80)
-            {
-               color = SDL_MapRGBA(surf->format, r, g, b, a);
-               ((Uint32 *)((Uint8 *)surf->pixels + y * surf->pitch))[x] = color;
-            }
+            row[x * 4 + 0] = r;
+            row[x * 4 + 1] = g;
+            row[x * 4 + 2] = b;
+            row[x * 4 + 3] = a;
          }
       }
    }
+   SDL_UnlockSurface(surf);
 
    tex = SDL_CreateTextureFromSurface(gpRenderer, surf);
    SDL_FreeSurface(surf);
+
    if (tex != NULL)
    {
       SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
@@ -312,12 +301,10 @@ PAL_JS_DrawOverlay(
    VOID
 )
 {
-   int      w = 0, h = 0, i;
-   double   cx, cy, r;
-   double   rgBtn[4][3];
    SDL_Rect dst;
+   int      i;
 
-   if (SDL_GetRendererOutputSize(gpRenderer, &w, &h) != 0 || w <= 0 || h <= 0)
+   if (!g_fJSLayoutReady)
    {
       return;
    }
@@ -325,25 +312,23 @@ PAL_JS_DrawOverlay(
    if (!g_fJSOverlayReady)
    {
       gpJSBaseTex = PAL_JS_MakeCircle(256, 255, 255, 255, 90, FALSE);
-      gpJSKnobTex = PAL_JS_MakeCircle(128, 255, 255, 255, 140, TRUE);
+      gpJSKnobTex = PAL_JS_MakeCircle(128, 255, 255, 255, 150, TRUE);
       gpJSBtnTex  = PAL_JS_MakeCircle(128, 255, 255, 255, 110, FALSE);
       g_fJSOverlayReady = TRUE;
    }
 
-   PAL_GetTouchLayout(w, h, &cx, &cy, &r, rgBtn);
-
    // 摇杆底座
-   dst.w = (int)(r * 2.0);
-   dst.h = (int)(r * 2.0);
-   dst.x = (int)(cx - r);
-   dst.y = (int)(cy - r);
+   dst.w = (int)(g_dJSR * 2.0);
+   dst.h = (int)(g_dJSR * 2.0);
+   dst.x = (int)(g_dJSCX - g_dJSR);
+   dst.y = (int)(g_dJSCY - g_dJSR);
    if (gpJSBaseTex) SDL_RenderCopy(gpRenderer, gpJSBaseTex, NULL, &dst);
 
    // 摇杆头
    {
-      double kx = cx + (g_fStickActive ? g_dStickDX : 0.0);
-      double ky = cy + (g_fStickActive ? g_dStickDY : 0.0);
-      int    kr = (int)(r * 0.46);
+      double kx = g_dJSCX + (g_fStickActive ? g_dStickDX : 0.0);
+      double ky = g_dJSCY + (g_fStickActive ? g_dStickDY : 0.0);
+      int    kr = (int)(g_dJSR * 0.46);
 
       dst.w = kr * 2;
       dst.h = kr * 2;
@@ -355,12 +340,12 @@ PAL_JS_DrawOverlay(
    // 四个按钮
    for (i = 0; i < 4; i++)
    {
-      int br = (int)rgBtn[i][2];
+      int br = (int)g_dJSBtn[i][2];
 
       dst.w = br * 2;
       dst.h = br * 2;
-      dst.x = (int)(rgBtn[i][0] - br);
-      dst.y = (int)(rgBtn[i][1] - br);
+      dst.x = (int)(g_dJSBtn[i][0] - br);
+      dst.y = (int)(g_dJSBtn[i][1] - br);
 
       if (gpJSBtnTex)
       {
@@ -396,19 +381,33 @@ def main():
         idx = text.find(fname)
         if idx < 0:
             raise SystemExit('input.c: PAL_MouseEventFilter not found')
-        # 往前找到该函数的 "static VOID" 声明行，插在它之前（不能插进签名中间）
         decl = text.rfind('static VOID', 0, idx)
         if decl < 0:
             raise SystemExit('input.c: static VOID declaration not found')
         text = text[:decl] + INPUT_CODE + '\n' + text[decl:]
 
-        # 在鼠标处理函数开头拦下事件
+        # 在鼠标事件处理里优先拦截
         anchor2 = '   if (lpEvent->type!= SDL_MOUSEBUTTONDOWN && lpEvent->type != SDL_MOUSEBUTTONUP)\n      return;'
         idx2 = text.find(anchor2)
         if idx2 < 0:
             raise SystemExit('input.c: mouse event type check not found')
-        hook = '   if (PAL_JSHandleEvent(lpEvent)) return;\n\n'
-        text = text[:idx2] + hook + text[idx2:]
+        text = text[:idx2] + '   if (PAL_JSHandleEvent(lpEvent)) return;\n\n' + text[idx2:]
+
+        # 在 PAL_SetTouchBounds 里计算布局
+        anchor3 = 'PAL_SetTouchBounds('
+        i3 = text.find(anchor3)
+        if i3 < 0:
+            raise SystemExit('input.c: PAL_SetTouchBounds not found')
+        # 找到函数体第一个 '{'
+        brace = text.find('{', i3)
+        if brace < 0:
+            raise SystemExit('input.c: PAL_SetTouchBounds body not found')
+        calc = (
+            '\n   PAL_GetTouchLayout((int)dwScreenWidth, (int)dwScreenHeight,\n'
+            '      &g_dJSCX, &g_dJSCY, &g_dJSR, g_dJSBtn);\n'
+            '   g_fJSLayoutReady = TRUE;\n'
+        )
+        text = text[:brace + 1] + calc + text[brace + 1:]
         write('input.c', text)
         print('  patched input.c')
     else:
@@ -426,11 +425,16 @@ def main():
             '\n\n// joystick overlay shared state (patched)\n'
             'VOID PAL_GetTouchLayout(int iWidth, int iHeight, double *pdStickCX,\n'
             '   double *pdStickCY, double *pdStickR, double rgBtn[4][3]);\n'
+            'VOID PAL_JS_DrawOverlay(VOID);\n'
             'extern BOOL   g_fStickActive;\n'
             'extern double g_dStickDX;\n'
             'extern double g_dStickDY;\n'
             'extern int    g_iPressedButton;\n'
-            'VOID PAL_JS_DrawOverlay(VOID);\n'
+            'extern double g_dJSCX;\n'
+            'extern double g_dJSCY;\n'
+            'extern double g_dJSR;\n'
+            'extern double g_dJSBtn[4][3];\n'
+            'extern BOOL   g_fJSLayoutReady;\n'
         )
         text = text[:end] + add + text[end:]
         write('input.h', text)
@@ -441,14 +445,12 @@ def main():
     # ---------- video.c ----------
     text = read('video.c')
     if MARKER_VIDEO not in text:
-        # 代码块插到 VIDEO_UpdateScreen 之前
         anchor = 'VOID\nVIDEO_UpdateScreen('
         idx = text.find(anchor)
         if idx < 0:
             raise SystemExit('video.c: VIDEO_UpdateScreen not found')
         text = text[:idx] + VIDEO_CODE + '\n' + text[idx:]
 
-        # 在 RenderPresent 之前绘制覆盖层
         anchor2 = 'SDL_RenderPresent(gpRenderer);'
         idx2 = text.find(anchor2)
         if idx2 < 0:
