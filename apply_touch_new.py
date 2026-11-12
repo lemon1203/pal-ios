@@ -172,7 +172,7 @@ PAL_Touch_Dispatch(
    }
 
    if (ev->type != SDL_MOUSEBUTTONDOWN && ev->type != SDL_MOUSEBUTTONUP
-       && ev->type != SDL_MOUSEMOTION)
+       && ev->type != PAL_TOUCH_MOTION)
    {
       return 0;
    }
@@ -182,8 +182,8 @@ PAL_Touch_Dispatch(
       return 0;
    }
 
-   mx = (ev->type == SDL_MOUSEMOTION) ? ev->motion.x : ev->button.x;
-   my = (ev->type == SDL_MOUSEMOTION) ? ev->motion.y : ev->button.y;
+   mx = (ev->type == PAL_TOUCH_MOTION) ? ev->motion.x : ev->button.x;
+   my = (ev->type == PAL_TOUCH_MOTION) ? ev->motion.y : ev->button.y;
 
    /* 窗口像素 -> 画面像素（按等比例缩放 + 居中偏移） */
    if (g_tScale > 0.0)
@@ -240,7 +240,7 @@ PAL_Touch_Dispatch(
       return 1;
    }
 
-   if (ev->type == SDL_MOUSEMOTION)
+   if (ev->type == PAL_TOUCH_MOTION)
    {
       if (g_tWalking && mag > g_tScreenH * 0.03)
       {
@@ -266,6 +266,12 @@ PAL_Touch_Dispatch(
 
 INPUT_HELPERS = r'''
 /* ===== modern touch layer: helpers (patched) ===== */
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+#define PAL_TOUCH_MOTION SDL_EVENT_MOUSE_MOTION
+#else
+#define PAL_TOUCH_MOTION SDL_MOUSEMOTION
+#endif
+
 double g_tScale = 1.0, g_tOffX = 0.0, g_tOffY = 0.0;
 int    g_tPressedButton = -1;
 static int g_tWalking = 0;
@@ -329,14 +335,14 @@ def main():
     p = os.path.join(root, 'input.c')
     t = read(p)
     if 'PAL_Touch_Dispatch' not in t:
-        anchor = 'PAL_MouseEventFilter('
+        anchor = 'VOID\nPAL_MouseEventFilter('
         idx = t.find(anchor)
         if idx < 0:
-            raise SystemExit('input.c: 找不到 PAL_MouseEventFilter')
+            raise SystemExit('input.c: 找不到 PAL_MouseEventFilter 定义')
         t = t[:idx] + INPUT_HELPERS + INPUT_CODE + '\n' + t[idx:]
 
         # 在 PAL_MouseEventFilter 函数体开头挂上 dispatch
-        idx = t.find('PAL_MouseEventFilter(')
+        idx = t.find(anchor)
         brace = t.find('{', idx)
         if brace < 0:
             raise SystemExit('input.c: 找不到函数体')
