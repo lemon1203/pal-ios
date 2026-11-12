@@ -38,6 +38,8 @@ double g_dJSCX = 0.0, g_dJSCY = 0.0, g_dJSR = 0.0;
 double g_dJSTexScaleX = 1.0, g_dJSTexScaleY = 1.0;   /* 窗口坐标 -> 纹理坐标 */
 double g_dJSScreenW = 0.0, g_dJSScreenH = 0.0;       /* 触摸坐标系下的屏幕尺寸 */
 double g_dStickTouchX = 0.0, g_dStickTouchY = 0.0;   /* 当前触点（绘制用） */
+double g_dJSTouchScale = 1.0;                        /* 窗口像素 -> 游戏像素 */
+double g_dJSTouchOffX = 0.0, g_dJSTouchOffY = 0.0;   /* 游戏画面在窗口中的偏移 */
 double g_dJSBtn[4][3];
 BOOL   g_fJSLayoutReady = FALSE;
 
@@ -177,14 +179,11 @@ PAL_JSHandleEvent(
    mx = (lpEvent->type == JS_EV_MOTION) ? lpEvent->motion.x : lpEvent->button.x;
    my = (lpEvent->type == JS_EV_MOTION) ? lpEvent->motion.y : lpEvent->button.y;
 
-   /* 触摸是窗口坐标，布局在纹理坐标：换算到纹理空间再判定 */
-   if (g_dJSTexScaleX > 0.0 && g_dJSTexScaleX != 1.0)
+   /* 触摸是窗口坐标，逻辑在游戏画面坐标：按等比例缩放换算 */
+   if (g_dJSTouchScale > 0.0 && g_dJSTouchScale != 1.0)
    {
-      mx *= g_dJSTexScaleX;
-   }
-   if (g_dJSTexScaleY > 0.0 && g_dJSTexScaleY != 1.0)
-   {
-      my *= g_dJSTexScaleY;
+      mx = (mx - g_dJSTouchOffX) / g_dJSTouchScale;
+      my = (my - g_dJSTouchOffY) / g_dJSTouchScale;
    }
 
    if (lpEvent->type == SDL_MOUSEBUTTONDOWN)
@@ -505,6 +504,9 @@ def main():
             'extern double g_dJSScreenH;\n'
             'extern double g_dStickTouchX;\n'
             'extern double g_dStickTouchY;\n'
+            'extern double g_dJSTouchScale;\n'
+            'extern double g_dJSTouchOffX;\n'
+            'extern double g_dJSTouchOffY;\n'
             'extern double g_dJSBtn[4][3];\n'
             'extern BOOL   g_fJSLayoutReady;\n'
         )

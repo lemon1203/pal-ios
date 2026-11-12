@@ -1,4 +1,4 @@
-name: Build SDLPAL iOS (with cheats)
+﻿name: Build SDLPAL iOS (with cheats)
 
 on:
   push:
@@ -15,12 +15,12 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - name: 取本仓库（补丁脚本）
+      - name: 鍙栨湰浠撳簱锛堣ˉ涓佽剼鏈級
         uses: actions/checkout@v4
         with:
           path: patcher
 
-      - name: 取 SDLPAL 源码（含子模块）
+      - name: 鍙?SDLPAL 婧愮爜锛堝惈瀛愭ā鍧楋級
         uses: actions/checkout@v4
         with:
           repository: sdlpal/sdlpal
@@ -29,36 +29,34 @@ jobs:
           fetch-depth: 1
           path: sdlpal
 
-      - name: 打金手指补丁
+      - name: 鎵撻噾鎵嬫寚琛ヤ竵
         run: |
           python3 patcher/apply_cheats.py sdlpal
-          echo "---- 验证补丁 ----"
+          echo "---- 楠岃瘉琛ヤ竵 ----"
           grep -n "CHEAT_WORD_BASE" sdlpal/ui.h | head -3
           grep -n "PAL_CheatMenu" sdlpal/uigame.c | head -3
           grep -n "g_fCheatWalkThrough" sdlpal/map.c | head -3
           grep -n "g_fCheatNoEncounter" sdlpal/battle.c | head -3
 
-      - name: 打摇杆触屏补丁
-        run: |
+      - name: 鎵撴憞鏉嗚Е灞忚ˉ涓?        run: |
           python3 patcher/apply_touch.py sdlpal
-          python3 patcher/apply_touch_px.py sdlpal
-          echo "---- 验证触屏补丁 ----"
+          python3 patcher/apply_touch_screen.py sdlpal
+          echo "---- 楠岃瘉瑙﹀睆琛ヤ竵 ----"
           grep -n "PAL_JSHandleEvent" sdlpal/input.c | head -3
-          grep -n "PAL_JS_DrawHudPixels" sdlpal/video.c | head -3
+          grep -n "PAL_JS_DrawOnScreen" sdlpal/video.c | head -3
           grep -n "PAL_GetTouchLayout" sdlpal/input.h | head -3
 
-      - name: 显示工具链版本
-        run: |
+      - name: 鏄剧ず宸ュ叿閾剧増鏈?        run: |
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
 
-      - name: 安装 CocoaPods 依赖
+      - name: 瀹夎 CocoaPods 渚濊禆
         working-directory: sdlpal/ios/SDLPal
         run: |
           pod --version || gem install cocoapods --no-document
           pod install --repo-update
 
-      - name: 编译 (无签名, arm64)
+      - name: 缂栬瘧 (鏃犵鍚? arm64)
         working-directory: sdlpal/ios/SDLPal
         run: |
           set -o pipefail
@@ -77,25 +75,24 @@ jobs:
             ENABLE_BITCODE=NO \
             build 2>&1 | tee build.log
 
-      - name: 打包成 ipa
+      - name: 鎵撳寘鎴?ipa
         run: |
           APP_PATH=$(find sdlpal/ios/SDLPal/build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
           echo "APP_PATH=$APP_PATH"
-          if [ -z "$APP_PATH" ]; then echo "没找到 .app，构建失败"; exit 1; fi
+          if [ -z "$APP_PATH" ]; then echo "娌℃壘鍒?.app锛屾瀯寤哄け璐?; exit 1; fi
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
           zip -qry SDLPAL-CHEAT.ipa Payload
           ls -lh SDLPAL-CHEAT.ipa
 
-      - name: 上传产物
+      - name: 涓婁紶浜х墿
         uses: actions/upload-artifact@v4
         with:
           name: SDLPAL-CHEAT-ipa
           path: SDLPAL-CHEAT.ipa
           retention-days: 30
 
-      - name: 失败时上传日志
-        if: failure()
+      - name: 澶辫触鏃朵笂浼犳棩蹇?        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
