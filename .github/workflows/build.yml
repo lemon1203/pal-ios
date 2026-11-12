@@ -1,4 +1,4 @@
-name: Build SDLPAL iOS
+name: Build SDLPAL iOS (with cheats)
 
 on:
   push:
@@ -11,7 +11,12 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - name: Checkout SDLPAL (含子模块)
+      - name: 取本仓库（补丁脚本）
+        uses: actions/checkout@v4
+        with:
+          path: patcher
+
+      - name: 取 SDLPAL 源码（含子模块）
         uses: actions/checkout@v4
         with:
           repository: sdlpal/sdlpal
@@ -19,6 +24,15 @@ jobs:
           submodules: recursive
           fetch-depth: 1
           path: sdlpal
+
+      - name: 打金手指补丁
+        run: |
+          python3 patcher/apply_cheats.py sdlpal
+          echo "---- 验证补丁 ----"
+          grep -n "CHEAT_WORD_BASE" sdlpal/ui.h | head -3
+          grep -n "PAL_CheatMenu" sdlpal/uigame.c | head -3
+          grep -n "g_fCheatWalkThrough" sdlpal/map.c | head -3
+          grep -n "g_fCheatNoEncounter" sdlpal/battle.c | head -3
 
       - name: 显示工具链版本
         run: |
@@ -57,17 +71,17 @@ jobs:
           if [ -z "$APP_PATH" ]; then echo "没找到 .app，构建失败"; exit 1; fi
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
-          zip -qry SDLPAL.ipa Payload
-          ls -lh SDLPAL.ipa
+          zip -qry SDLPAL-CHEAT.ipa Payload
+          ls -lh SDLPAL-CHEAT.ipa
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: SDLPAL-ipa
-          path: SDLPAL.ipa
+          name: SDLPAL-CHEAT-ipa
+          path: SDLPAL-CHEAT.ipa
           retention-days: 30
 
-      - name: 失败时也上传日志
+      - name: 失败时上传日志
         if: failure()
         uses: actions/upload-artifact@v4
         with:
