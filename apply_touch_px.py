@@ -203,31 +203,33 @@ PAL_JS_DrawHudPixels(
       g_fJSLayoutReady = TRUE;
    }
 
-   /* 摇杆：极淡的底盘 + 细白环（暗黑2 风格） */
-   JS_Disc(buf, pitch, texW, texH, g_dJSCX, g_dJSCY, g_dJSR, 0, 0, 0, 26);
+   /* 摇杆：无填充（完全透出场景）+ 较亮的细白环，同暗黑2 */
    JS_Ring(buf, pitch, texW, texH, g_dJSCX, g_dJSCY, g_dJSR,
-           g_dJSR * 0.035 + 0.8, 255, 255, 255, 80);
+           g_dJSR * 0.045 + 0.9, 255, 255, 255, 150);
 
-   /* 摇杆头：半透明白点 */
+   /* 摇杆头：小半透明白点 */
    kx = g_dJSCX + (g_fStickActive ? g_dStickDX : 0.0);
    ky = g_dJSCY + (g_fStickActive ? g_dStickDY : 0.0);
-   JS_Disc(buf, pitch, texW, texH, kx, ky, g_dJSR * 0.34, 255, 255, 255, 105);
+   JS_Disc(buf, pitch, texW, texH, kx, ky, g_dJSR * 0.30, 255, 255, 255, 120);
 
-   /* 按钮：极淡圆盘 + 细白环 */
+   /* 按钮：无填充 + 细白环；按下才出现淡淡的底 */
    for (i = 0; i < 4; i++)
    {
       double bx = g_dJSBtn[i][0];
       double by = g_dJSBtn[i][1];
       double br = g_dJSBtn[i][2];
-      int    aF = (g_iPressedButton == i) ? 70 : 24;
-      int    aR = (g_iPressedButton == i) ? 170 : 85;
+      int    aF = (g_iPressedButton == i) ? 55 : 0;
+      int    aR = (g_iPressedButton == i) ? 200 : 150;
 
-      JS_Disc(buf, pitch, texW, texH, bx, by, br, 0, 0, 0, aF);
-      JS_Ring(buf, pitch, texW, texH, bx, by, br, br * 0.055 + 0.8, 255, 255, 255, aR);
-
-      if (i == 1 && br > 6.0)
+      if (aF > 0)
       {
-         JS_Hamburger(buf, pitch, texW, texH, bx, by, br, 255, 255, 255, 100);
+         JS_Disc(buf, pitch, texW, texH, bx, by, br, 0, 0, 0, aF);
+      }
+      JS_Ring(buf, pitch, texW, texH, bx, by, br, br * 0.06 + 0.9, 255, 255, 255, aR);
+
+      if (i == 1 && br > 5.0)
+      {
+         JS_Hamburger(buf, pitch, texW, texH, bx, by, br, 255, 255, 255, 150);
       }
    }
 }

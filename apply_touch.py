@@ -55,24 +55,24 @@ PAL_GetTouchLayout(
 {
    double dH = (double)iHeight;
    double dW = (double)iWidth;
-   double dR = dH * 0.170;
-   double dBig = dH * 0.095;
-   double dSmall = dH * 0.070;
-   double dTiny = dH * 0.058;
+   double dR = dH * 0.105;
+   double dBig = dH * 0.052;
+   double dSmall = dH * 0.038;
+   double dTiny = dH * 0.032;
    double ax, ay;
 
    if (pdStickR)  *pdStickR  = dR;
-   if (pdStickCX) *pdStickCX = dR * 1.22;
-   if (pdStickCY) *pdStickCY = dH - dR * 1.22;
+   if (pdStickCX) *pdStickCX = dR * 1.45;
+   if (pdStickCY) *pdStickCY = dH - dR * 1.45;
 
-   /* 主按钮走暗黑2 的右下角布局：一个大键 + 三个环绕小键 */
-   ax = dW - dH * 0.135;
-   ay = dH - dH * 0.135;
+   /* 暗黑2 的右下角布局：一个大键 + 三个环绕小键 */
+   ax = dW - dH * 0.085;
+   ay = dH - dH * 0.095;
 
    rgBtn[0][0] = ax;                        rgBtn[0][1] = ay;                        rgBtn[0][2] = dBig;
-   rgBtn[1][0] = ax - dH * 0.215;           rgBtn[1][1] = ay - dH * 0.010;           rgBtn[1][2] = dSmall;
-   rgBtn[2][0] = ax - dH * 0.020;           rgBtn[2][1] = ay - dH * 0.205;           rgBtn[2][2] = dSmall;
-   rgBtn[3][0] = ax - dH * 0.200;           rgBtn[3][1] = ay - dH * 0.175;           rgBtn[3][2] = dTiny;
+   rgBtn[1][0] = ax - dH * 0.125;           rgBtn[1][1] = ay - dH * 0.020;           rgBtn[1][2] = dSmall;
+   rgBtn[2][0] = ax - dH * 0.010;           rgBtn[2][1] = ay - dH * 0.125;           rgBtn[2][2] = dSmall;
+   rgBtn[3][0] = ax - dH * 0.120;           rgBtn[3][1] = ay - dH * 0.115;           rgBtn[3][2] = dTiny;
 }
 
 static VOID
