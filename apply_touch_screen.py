@@ -180,6 +180,17 @@ def main():
     )
     text = text[:line_end] + insert + text[line_end:]
 
+    # 定义在本文件靠后，必须先声明（否则 C99 报 implicit declaration）
+    proto = (
+        '/* on-screen UI prototype (patched) */\n'
+        'void PAL_JS_DrawOnScreen(Uint8 *buf, int pitch, int w, int h);\n\n'
+    )
+    anchor_rc = 'VOID\nVIDEO_RenderCopy('
+    ridx = text.find(anchor_rc)
+    if ridx < 0:
+        raise SystemExit('video.c: 找不到 VIDEO_RenderCopy 定义')
+    text = text[:ridx] + proto + text[ridx:]
+
     with io.open(path, 'w', encoding='utf-8', newline='\n', errors='surrogateescape') as f:
         f.write(text)
 
