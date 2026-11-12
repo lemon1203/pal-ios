@@ -41,10 +41,10 @@ jobs:
       - name: 打摇杆触屏补丁
         run: |
           python3 patcher/apply_touch.py sdlpal
-        python3 patcher/apply_touch_px.py sdlpal
+          python3 patcher/apply_touch_px.py sdlpal
           echo "---- 验证触屏补丁 ----"
           grep -n "PAL_JSHandleEvent" sdlpal/input.c | head -3
-          grep -n "PAL_JS_DrawOverlay" sdlpal/video.c | head -3
+          grep -n "PAL_JS_DrawHudPixels" sdlpal/video.c | head -3
           grep -n "PAL_GetTouchLayout" sdlpal/input.h | head -3
 
       - name: 显示工具链版本
