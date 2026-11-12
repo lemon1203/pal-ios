@@ -335,14 +335,19 @@ def main():
     p = os.path.join(root, 'input.c')
     t = read(p)
     if 'PAL_Touch_Dispatch' not in t:
-        anchor = 'VOID\nPAL_MouseEventFilter('
-        idx = t.find(anchor)
+        # 定位 PAL_MouseEventFilter 的定义，退到该声明块的起始（可能是 "static\nVOID"）
+        idx = t.find('PAL_MouseEventFilter(')
         if idx < 0:
             raise SystemExit('input.c: 找不到 PAL_MouseEventFilter 定义')
-        t = t[:idx] + INPUT_HELPERS + INPUT_CODE + '\n' + t[idx:]
+        start = t.rfind('\n\n', 0, idx)
+        if start < 0:
+            start = 0
+        else:
+            start += 1
+        t = t[:start] + INPUT_HELPERS + INPUT_CODE + '\n' + t[start:]
 
         # 在 PAL_MouseEventFilter 函数体开头挂上 dispatch
-        idx = t.find(anchor)
+        idx = t.find('PAL_MouseEventFilter(')
         brace = t.find('{', idx)
         if brace < 0:
             raise SystemExit('input.c: 找不到函数体')
