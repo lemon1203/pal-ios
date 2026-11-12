@@ -2,6 +2,9 @@
 """
 给 SDLPAL 打金手指补丁（幂等，可重复执行）。
 
+标签文字使用 Big5 编码（游戏数据是 Big5，字体走内建繁体中文字库），
+这样菜单里显示的是中文而不是 ASCII。
+
 用法: python3 apply_cheats.py <sdlpal 源码根目录>
 """
 
@@ -12,6 +15,50 @@ import sys
 SRC = sys.argv[1] if len(sys.argv) > 1 else '.'
 
 MARKER = '// ===== Cheat menu (patched in by apply_cheats.py) ====='
+
+# 标签文字（繁体，Big5 编码）
+LABELS = {
+    'money_plus': u'金錢 +10000',
+    'money_full': u'金錢 全滿',
+    'level':      u'全員 99 級',
+    'stats':      u'全員 屬性 9999',
+    'heal':       u'全員 回滿',
+    'items':      u'道具 全部 99',
+    'walk':       u'穿牆: ',
+    'encounter':  u'不遇敵: ',
+    'back':       u'返回',
+    'title':      u'金手指',
+}
+TOGGLE = {'on': u'開', 'off': u'關'}
+
+
+def b5(text):
+    """编码成 Big5，返回 C 字符串字面量（含转义）。"""
+    try:
+        raw = text.encode('big5')
+    except UnicodeEncodeError:
+        raw = text.encode('ascii', 'ignore')
+    return ''.join('\\x%02x' % b for b in raw)
+
+
+def build_b5_block():
+    lines = ['// 金手指标签（Big5 编码，脚本生成）']
+    for key, text in LABELS.items():
+        esc = b5(text)
+        n = len(text.encode('big5')) if _encodable(text) else len(esc) // 4
+        lines.append('static const unsigned char b5_%s[] = "%s";' % (key, esc))
+    lines.append('static const unsigned char b5_on[]  = "%s";' % b5(TOGGLE['on']))
+    lines.append('static const unsigned char b5_off[] = "%s";' % b5(TOGGLE['off']))
+    return '\n'.join(lines)
+
+
+def _encodable(text):
+    try:
+        text.encode('big5')
+        return True
+    except UnicodeEncodeError:
+        return False
+
 
 CHEAT_CODE = r'''
 //
@@ -25,25 +72,53 @@ static WCHAR g_rgCheatWide[CHEAT_LABEL_SLOTS][48];
 
 static VOID PAL_CheatRefreshLabels(VOID);
 
+__B5_DEFS__
+
+//
+// 把 Big5 字节串（可追加 ASCII 后缀）转成宽字符存进标签槽
+//
 static VOID
-PAL_CheatSetLabel(
-   int         iOffset,
-   const char *szText
+PAL_CheatSetLabelB5(
+   int                  iOffset,
+   const unsigned char *pBytes,
+   int                  nBytes,
+   const char          *szSuffix
 )
 {
-   int i = 0;
+   char   buf[96];
+   int    len = nBytes;
+   int    w;
+   WCHAR *dst;
 
    if (iOffset < 0 || iOffset >= CHEAT_LABEL_SLOTS)
    {
       return;
    }
 
-   while (szText[i] != '\0' && i < 47)
+   dst = g_rgCheatWide[iOffset];
+
+   if (len > 80)
    {
-      g_rgCheatWide[iOffset][i] = (WCHAR)(unsigned char)szText[i];
-      i++;
+      len = 80;
    }
-   g_rgCheatWide[iOffset][i] = 0;
+   memcpy(buf, pBytes, (size_t)len);
+
+   while (szSuffix != NULL && *szSuffix != '\0' && len < 92)
+   {
+      buf[len++] = *szSuffix++;
+   }
+
+   w = PAL_MultiByteToWideCharCP(CP_BIG5, (LPCSTR)buf, (size_t)len, dst, 47);
+   if (w <= 0)
+   {
+      dst[0] = 0;
+      return;
+   }
+   if (w > 46)
+   {
+      w = 46;
+   }
+   dst[w] = 0;
 }
 
 LPCWSTR
@@ -71,16 +146,18 @@ PAL_CheatRefreshLabels(
    VOID
 )
 {
-   PAL_CheatSetLabel(0,  "MONEY   +10000");
-   PAL_CheatSetLabel(1,  "MONEY   = 999999");
-   PAL_CheatSetLabel(2,  "ALL     LEVEL 99");
-   PAL_CheatSetLabel(3,  "ALL     STATS 9999");
-   PAL_CheatSetLabel(4,  "ALL     HP/MP FULL");
-   PAL_CheatSetLabel(5,  "ITEMS   x99");
-   PAL_CheatSetLabel(6,  g_fCheatWalkThrough ? "WALK THROUGH: ON" : "WALK THROUGH: OFF");
-   PAL_CheatSetLabel(7,  g_fCheatNoEncounter ? "NO ENCOUNTER: ON" : "NO ENCOUNTER: OFF");
-   PAL_CheatSetLabel(8,  "BACK");
-   PAL_CheatSetLabel(10, "CHEAT");
+   PAL_CheatSetLabelB5(0,  b5_money_plus, sizeof(b5_money_plus) - 1, NULL);
+   PAL_CheatSetLabelB5(1,  b5_money_full, sizeof(b5_money_full) - 1, NULL);
+   PAL_CheatSetLabelB5(2,  b5_level,      sizeof(b5_level) - 1,      NULL);
+   PAL_CheatSetLabelB5(3,  b5_stats,      sizeof(b5_stats) - 1,      NULL);
+   PAL_CheatSetLabelB5(4,  b5_heal,       sizeof(b5_heal) - 1,       NULL);
+   PAL_CheatSetLabelB5(5,  b5_items,      sizeof(b5_items) - 1,      NULL);
+   PAL_CheatSetLabelB5(6,  b5_walk,       sizeof(b5_walk) - 1,
+      g_fCheatWalkThrough ? (const char *)b5_on : (const char *)b5_off);
+   PAL_CheatSetLabelB5(7,  b5_encounter,  sizeof(b5_encounter) - 1,
+      g_fCheatNoEncounter ? (const char *)b5_on : (const char *)b5_off);
+   PAL_CheatSetLabelB5(8,  b5_back,       sizeof(b5_back) - 1,       NULL);
+   PAL_CheatSetLabelB5(10, b5_title,      sizeof(b5_title) - 1,      NULL);
 }
 
 static VOID
@@ -147,10 +224,12 @@ PAL_CheatApply(
 
    case 6:
       g_fCheatWalkThrough = !g_fCheatWalkThrough;
+      PAL_CheatRefreshLabels();
       break;
 
    case 7:
       g_fCheatNoEncounter = !g_fCheatNoEncounter;
+      PAL_CheatRefreshLabels();
       break;
 
    default:
@@ -193,7 +272,7 @@ PAL_CheatMenu(
 
    if (wReturnValue - 1 == 8)
    {
-      return;   // BACK
+      return;   // 返回
    }
 
    PAL_CheatApply(wReturnValue - 1);
@@ -258,9 +337,7 @@ def main():
     else:
         print('  skip text.c')
 
-    # 3) uigame.c: system menu item
-    #    NOTE: 必须放在 #if !defined(PAL_CLASSIC) 块外面，
-    #    否则 PAL_CLASSIC 构建（iOS 就是）会把这一项一起编译掉。
+    # 3) uigame.c: system menu item (outside PAL_CLASSIC guard)
     text = read('uigame.c')
     if 'CHEAT_WORD_BASE + 10' not in text:
         marker = '#endif\n   };'
@@ -281,7 +358,7 @@ def main():
     else:
         print('  skip uigame.c (menu item)')
 
-    # 4) uigame.c: menu rect taller
+    # 4) uigame.c: taller update rect
     text = read('uigame.c')
     if 'rect = {40, 60, 280, 160}' not in text:
         old = 'const SDL_Rect      rect = {40, 60, 280, 135};'
@@ -293,7 +370,7 @@ def main():
     else:
         print('  skip uigame.c (rect)')
 
-    # 5) uigame.c: case 7 handler
+    # 5) uigame.c: case 7
     text = read('uigame.c')
     if 'PAL_CheatMenu();' not in text:
         anchor = '   case 2:\n      //\n      // Load game\n      //'
@@ -318,7 +395,8 @@ def main():
     # 6) uigame.c: append cheat implementation
     text = read('uigame.c')
     if MARKER not in text:
-        text = text + '\n' + CHEAT_CODE + '\n'
+        code = CHEAT_CODE.replace('__B5_DEFS__', build_b5_block())
+        text = text + '\n' + code + '\n'
         write('uigame.c', text)
         print('  appended cheat code to uigame.c')
     else:
@@ -353,7 +431,7 @@ def main():
     else:
         print('  skip map.c (walk through)')
 
-    # 8) battle.c: no-encounter hook
+    # 8) battle.c: no-encounter
     text = read('battle.c')
     if 'if (g_fCheatNoEncounter) return kBattleResultFleed;' not in text:
         anchor = 'PAL_StartBattle(\n   WORD        wEnemyTeam,'
