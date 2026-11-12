@@ -38,12 +38,11 @@ jobs:
 
       - name: 打触屏补丁
         run: |
-          python3 patcher/apply_touch.py sdlpal
-          python3 patcher/apply_touch_screen.py sdlpal
+          python3 patcher/apply_touch_new.py sdlpal
           echo "---- 验证触屏补丁 ----"
-          grep -n "PAL_JSHandleEvent" sdlpal/input.c | head -3
-          grep -n "PAL_JS_DrawOnScreen" sdlpal/video.c | head -3
-          grep -n "PAL_GetTouchLayout" sdlpal/input.h | head -3
+          grep -n "PAL_Touch_Dispatch" sdlpal/input.c | head -3
+          grep -n "PAL_Touch_Draw" sdlpal/video.c | head -3
+          grep -n "g_tBtn" sdlpal/input.h | head -3
 
       - name: 显示工具链版本
         run: |
