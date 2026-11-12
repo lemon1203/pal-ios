@@ -35,6 +35,7 @@ double g_dStickDY      = 0.0;
 int   g_iPressedButton = -1;
 
 double g_dJSCX = 0.0, g_dJSCY = 0.0, g_dJSR = 0.0;
+double g_dJSTexScaleX = 1.0, g_dJSTexScaleY = 1.0;   /* 窗口坐标 -> 纹理坐标 */
 double g_dJSBtn[4][3];
 BOOL   g_fJSLayoutReady = FALSE;
 
@@ -173,6 +174,16 @@ PAL_JSHandleEvent(
 
    mx = (lpEvent->type == JS_EV_MOTION) ? lpEvent->motion.x : lpEvent->button.x;
    my = (lpEvent->type == JS_EV_MOTION) ? lpEvent->motion.y : lpEvent->button.y;
+
+   /* 触摸是窗口坐标，布局在纹理坐标：换算到纹理空间再判定 */
+   if (g_dJSTexScaleX > 0.0 && g_dJSTexScaleX != 1.0)
+   {
+      mx *= g_dJSTexScaleX;
+   }
+   if (g_dJSTexScaleY > 0.0 && g_dJSTexScaleY != 1.0)
+   {
+      my *= g_dJSTexScaleY;
+   }
 
    if (lpEvent->type == SDL_MOUSEBUTTONDOWN)
    {
@@ -486,6 +497,8 @@ def main():
             'extern double g_dJSCX;\n'
             'extern double g_dJSCY;\n'
             'extern double g_dJSR;\n'
+            'extern double g_dJSTexScaleX;\n'
+            'extern double g_dJSTexScaleY;\n'
             'extern double g_dJSBtn[4][3];\n'
             'extern BOOL   g_fJSLayoutReady;\n'
         )

@@ -1,16 +1,21 @@
-"""像素级触屏覆盖层：直接把摇杆/按钮画进游戏纹理的像素缓冲。
+"""像素级触屏覆盖层：把摇杆/按钮画进游戏纹理的像素缓冲。
 
-不走 SDL 纹理，绕开 iOS/SDL3 渲染路径上的所有不确定性。
-插到 VIDEO_RenderCopy 里 SDL_UnlockTexture 之前执行。
+要点：
+1. 不走 SDL 纹理，绕开 iOS/SDL3 渲染路径的不确定性；
+2. 布局按「游戏画面矩形」算（不是整张纹理），所以不会画到黑边上；
+3. 触摸是窗口坐标，绘制是纹理坐标，用 g_dJSTexScaleX/Y 换算；
+4. 透明度贴近暗黑2：底盘几乎透明，只有一圈细白边。
 """
 import io
 import os
 import sys
 
-MARKER = 'PAL_JS_DrawHudPixels(pixelbuf'
+MARKER = 'PAL_JS_DrawHudPixels('
 
 CODE = r'''
 /* ===== pixel joystick overlay (patched) ===== */
+void PAL_JS_DrawHudPixels(Uint8 *buf, int pitch, int texW, int texH, int winW, int winH);
+
 static void
 JS_BlendPixel(
    Uint8 *p,
@@ -118,6 +123,8 @@ static void
 JS_Hamburger(
    Uint8 *buf,
    int    pitch,
+   int    w,
+   int    h,
    double cx,
    double cy,
    double rad,
@@ -131,17 +138,16 @@ JS_Hamburger(
 
    for (i = -1; i <= 1; i++)
    {
-      double by = cy + i * rad * 0.34;
-      double bx = cx - rad * 0.48;
+      double by = cy + i * rad * 0.32;
+      double bx = cx - rad * 0.42;
 
-      while (bx <= cx + rad * 0.48)
+      while (bx <= cx + rad * 0.42)
       {
          int px = (int)bx, py = (int)by;
 
-         if (px >= 0 && py >= 0)
+         if (px >= 0 && py >= 0 && px < w && py < h)
          {
             JS_BlendPixel(buf + (size_t)py * (size_t)pitch + (size_t)px * 4, r, g, b, a);
-            JS_BlendPixel(buf + (size_t)(py + 1) * (size_t)pitch + (size_t)px * 4, r, g, b, a);
          }
          bx += 1.0;
       }
@@ -160,57 +166,68 @@ PAL_JS_DrawHudPixels(
 {
    int    i;
    double kx, ky;
-   double s;
 
    if (buf == NULL || pitch <= 0 || texW < 64 || texH < 64)
    {
       return;
    }
 
-   /* 布局按窗口坐标算（触摸事件也是窗口坐标），画的时候缩到纹理空间 */
-   if (!g_fJSLayoutReady && winW > 0 && winH > 0)
+   /* 触摸(窗口) -> 绘制(纹理) 的换算系数 */
+   if (winW > 0 && winH > 0)
    {
-      PAL_GetTouchLayout(winW, winH, &g_dJSCX, &g_dJSCY, &g_dJSR, g_dJSBtn);
+      g_dJSTexScaleX = (double)texW / (double)winW;
+      g_dJSTexScaleY = (double)texH / (double)winH;
+   }
+
+   /* 布局按游戏画面矩形算，再平移到纹理坐标，避免画到黑边上 */
+   if (!g_fJSLayoutReady)
+   {
+      int gw = gTextureRect.w;
+      int gh = gTextureRect.h;
+
+      if (gw <= 0 || gh <= 0)
+      {
+         gw = texW;
+         gh = texH;
+      }
+
+      PAL_GetTouchLayout(gw, gh, &g_dJSCX, &g_dJSCY, &g_dJSR, g_dJSBtn);
+
+      g_dJSCX += gTextureRect.x;
+      g_dJSCY += gTextureRect.y;
+      for (i = 0; i < 4; i++)
+      {
+         g_dJSBtn[i][0] += gTextureRect.x;
+         g_dJSBtn[i][1] += gTextureRect.y;
+      }
       g_fJSLayoutReady = TRUE;
    }
 
-   if (!g_fJSLayoutReady)
-   {
-      return;
-   }
+   /* 摇杆：极淡的底盘 + 细白环（暗黑2 风格） */
+   JS_Disc(buf, pitch, texW, texH, g_dJSCX, g_dJSCY, g_dJSR, 0, 0, 0, 26);
+   JS_Ring(buf, pitch, texW, texH, g_dJSCX, g_dJSCY, g_dJSR,
+           g_dJSR * 0.035 + 0.8, 255, 255, 255, 80);
 
-   s = (winW > 0) ? ((double)texW / (double)winW) : 1.0;
+   /* 摇杆头：半透明白点 */
+   kx = g_dJSCX + (g_fStickActive ? g_dStickDX : 0.0);
+   ky = g_dJSCY + (g_fStickActive ? g_dStickDY : 0.0);
+   JS_Disc(buf, pitch, texW, texH, kx, ky, g_dJSR * 0.34, 255, 255, 255, 105);
 
-   /* 摇杆：深色底盘 + 细白环 */
-   {
-      double cx = g_dJSCX * s, cy = g_dJSCY * s, rr = g_dJSR * s;
-
-      JS_Disc(buf, pitch, texW, texH, cx, cy, rr, 0, 0, 0, 72);
-      JS_Ring(buf, pitch, texW, texH, cx, cy, rr, rr * 0.06 + 1.0, 255, 255, 255, 170);
-
-      /* 摇杆头 */
-      kx = cx + (g_fStickActive ? g_dStickDX * s : 0.0);
-      ky = cy + (g_fStickActive ? g_dStickDY * s : 0.0);
-      JS_Disc(buf, pitch, texW, texH, kx, ky, rr * 0.40, 255, 255, 255, 175);
-      JS_Ring(buf, pitch, texW, texH, kx, ky, rr * 0.40, rr * 0.05 + 1.0, 0, 0, 0, 90);
-   }
-
-   /* 按钮：深色圆盘 + 白环；按下变亮 */
+   /* 按钮：极淡圆盘 + 细白环 */
    for (i = 0; i < 4; i++)
    {
-      double bx = g_dJSBtn[i][0] * s;
-      double by = g_dJSBtn[i][1] * s;
-      double br = g_dJSBtn[i][2] * s;
-      int    aF = (g_iPressedButton == i) ? 150 : 95;
-      int    aR = (g_iPressedButton == i) ? 255 : 190;
+      double bx = g_dJSBtn[i][0];
+      double by = g_dJSBtn[i][1];
+      double br = g_dJSBtn[i][2];
+      int    aF = (g_iPressedButton == i) ? 70 : 24;
+      int    aR = (g_iPressedButton == i) ? 170 : 85;
 
       JS_Disc(buf, pitch, texW, texH, bx, by, br, 0, 0, 0, aF);
-      JS_Ring(buf, pitch, texW, texH, bx, by, br, br * 0.10 + 1.0, 255, 255, 255, aR);
+      JS_Ring(buf, pitch, texW, texH, bx, by, br, br * 0.055 + 0.8, 255, 255, 255, aR);
 
-      /* 菜单键（索引 1）画三条横线做记号 */
       if (i == 1 && br > 6.0)
       {
-         JS_Hamburger(buf, pitch, bx, by, br, 255, 255, 255, 190);
+         JS_Hamburger(buf, pitch, texW, texH, bx, by, br, 255, 255, 255, 100);
       }
    }
 }
@@ -253,17 +270,6 @@ def main():
         '\t}\n'
     )
     text = text[:line_start] + insert + text[line_start:]
-
-    # 函数定义在后面，往前放一个声明，避免 implicit declaration
-    proto = (
-        '/* pixel joystick overlay prototype (patched) */\n'
-        'void PAL_JS_DrawHudPixels(Uint8 *buf, int pitch, int texW, int texH, int winW, int winH);\n\n'
-    )
-    anchor_rc = 'VOID\nVIDEO_RenderCopy('
-    ridx = text.find(anchor_rc)
-    if ridx < 0:
-        raise SystemExit('video.c: 找不到 VIDEO_RenderCopy 定义')
-    text = text[:ridx] + proto + text[ridx:]
 
     with io.open(path, 'w', encoding='utf-8', newline='\n', errors='surrogateescape') as f:
         f.write(text)
