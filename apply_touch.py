@@ -22,6 +22,13 @@ INPUT_CODE = r'''
 /* ===== joystick touch (patched) ===== */
 #define JS_BTN_COUNT 4
 
+/* SDL2/SDL3 事件名兼容：SDL3 把 JS_EV_MOTION 改名为 SDL_EVENT_MOUSE_MOTION */
+#if SDL_VERSION_ATLEAST(3,0,0)
+#  define JS_EV_MOTION SDL_EVENT_MOUSE_MOTION
+#else
+#  define JS_EV_MOTION SDL_MOUSEMOTION
+#endif
+
 BOOL  g_fStickActive   = FALSE;
 double g_dStickDX      = 0.0;
 double g_dStickDY      = 0.0;
@@ -149,7 +156,7 @@ PAL_JSHandleEvent(
 
    if (lpEvent->type != SDL_MOUSEBUTTONDOWN &&
        lpEvent->type != SDL_MOUSEBUTTONUP &&
-       lpEvent->type != SDL_MOUSEMOTION)
+       lpEvent->type != JS_EV_MOTION)
    {
       return FALSE;
    }
@@ -159,8 +166,8 @@ PAL_JSHandleEvent(
       return FALSE;
    }
 
-   mx = (lpEvent->type == SDL_MOUSEMOTION) ? lpEvent->motion.x : lpEvent->button.x;
-   my = (lpEvent->type == SDL_MOUSEMOTION) ? lpEvent->motion.y : lpEvent->button.y;
+   mx = (lpEvent->type == JS_EV_MOTION) ? lpEvent->motion.x : lpEvent->button.x;
+   my = (lpEvent->type == JS_EV_MOTION) ? lpEvent->motion.y : lpEvent->button.y;
 
    if (lpEvent->type == SDL_MOUSEBUTTONDOWN)
    {
@@ -192,7 +199,7 @@ PAL_JSHandleEvent(
       return TRUE;
    }
 
-   if (lpEvent->type == SDL_MOUSEMOTION)
+   if (lpEvent->type == JS_EV_MOTION)
    {
       if (g_fStickActive)
       {
