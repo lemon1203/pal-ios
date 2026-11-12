@@ -241,16 +241,29 @@ def main():
     line_start = text.rfind('\n', 0, hidx) + 1
     insert = (
         '\t{\n'
-        '\t\tint jsW = 0, jsH = 0, winW = 0, winH = 0;\n'
-        '\t\tSDL_QueryTexture(gpTexture, NULL, NULL, &jsW, &jsH);\n'
+        '\t\tint jsW = texture_pitch / 4;\n'
+        '\t\tint jsH = gTextureRect.y * 2 + gTextureRect.h;\n'
+        '\t\tint winW = 0, winH = 0;\n'
         '\t\tSDL_GetRendererOutputSize(gpRenderer, &winW, &winH);\n'
-        '\t\tif (jsW <= 0) jsW = texture_pitch / 4;\n'
+        '\t\tif (jsW <= 0) jsW = 320;\n'
+        '\t\tif (jsH <= 0) jsH = 200;\n'
         '\t\tif (winW <= 0) { winW = jsW; winH = jsH; }\n'
         '\t\tPAL_JS_DrawHudPixels((Uint8 *)texture_pixels, texture_pitch,\n'
         '\t\t   jsW, jsH, winW, winH);\n'
         '\t}\n'
     )
     text = text[:line_start] + insert + text[line_start:]
+
+    # 函数定义在后面，往前放一个声明，避免 implicit declaration
+    proto = (
+        '/* pixel joystick overlay prototype (patched) */\n'
+        'void PAL_JS_DrawHudPixels(Uint8 *buf, int pitch, int texW, int texH, int winW, int winH);\n\n'
+    )
+    anchor_rc = 'VIDEO_RenderCopy(\n   VOID\n)'
+    ridx = text.find(anchor_rc)
+    if ridx < 0:
+        raise SystemExit('video.c: 找不到 VIDEO_RenderCopy 定义')
+    text = text[:ridx] + proto + text[ridx:]
 
     with io.open(path, 'w', encoding='utf-8', newline='\n', errors='surrogateescape') as f:
         f.write(text)
