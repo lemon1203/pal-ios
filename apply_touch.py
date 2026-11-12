@@ -36,6 +36,8 @@ int   g_iPressedButton = -1;
 
 double g_dJSCX = 0.0, g_dJSCY = 0.0, g_dJSR = 0.0;
 double g_dJSTexScaleX = 1.0, g_dJSTexScaleY = 1.0;   /* 窗口坐标 -> 纹理坐标 */
+double g_dJSScreenW = 0.0, g_dJSScreenH = 0.0;       /* 触摸坐标系下的屏幕尺寸 */
+double g_dStickTouchX = 0.0, g_dStickTouchY = 0.0;   /* 当前触点（绘制用） */
 double g_dJSBtn[4][3];
 BOOL   g_fJSLayoutReady = FALSE;
 
@@ -187,23 +189,8 @@ PAL_JSHandleEvent(
 
    if (lpEvent->type == SDL_MOUSEBUTTONDOWN)
    {
-      double sdx = mx - g_dJSCX;
-      double sdy = my - g_dJSCY;
-
       //
-      // 只在摇杆圆范围内接管（半径 1.6 倍，宽松一点好按）
-      //
-      if (sqrt(sdx * sdx + sdy * sdy) <= g_dJSR * 1.6)
-      {
-         g_fStickActive = TRUE;
-         g_dStickDX = sdx;
-         g_dStickDY = sdy;
-         PAL_JSApplyDirection(sdx, sdy);
-         return TRUE;
-      }
-
-      //
-      // 按钮圆范围内接管
+      // 右下角按钮优先
       //
       for (i = 0; i < JS_BTN_COUNT; i++)
       {
@@ -211,7 +198,7 @@ PAL_JSHandleEvent(
          double dy = my - g_dJSBtn[i][1];
          double d  = sqrt(dx * dx + dy * dy);
 
-         if (d < g_dJSBtn[i][2] * 1.35)
+         if (d < g_dJSBtn[i][2] * 1.6)
          {
             g_iPressedButton = i;
             PAL_JSButtonDown(i);
@@ -220,7 +207,28 @@ PAL_JSHandleEvent(
       }
 
       //
-      // 其他区域不接管，交回原有逻辑（菜单、音量等）
+      // 全屏摇杆：按在任意位置，就朝「触点相对屏幕中心的方向」走
+      //
+      {
+         double cx = (g_dJSScreenW > 0.0) ? g_dJSScreenW * 0.5 : mx;
+         double cy = (g_dJSScreenH > 0.0) ? g_dJSScreenH * 0.5 : my;
+         double dx = mx - cx;
+         double dy = my - cy;
+         double mag = sqrt(dx * dx + dy * dy);
+         double dead = (g_dJSScreenH > 0.0) ? g_dJSScreenH * 0.06 : 24.0;
+
+         if (mag > dead)
+         {
+            g_fStickActive = TRUE;
+            g_dStickTouchX = mx;
+            g_dStickTouchY = my;
+            PAL_JSApplyDirection(dx, dy);
+            return TRUE;
+         }
+      }
+
+      //
+      // 屏幕正中间一小块：交回原逻辑（菜单里的确定等）
       //
       return FALSE;
    }
@@ -229,18 +237,12 @@ PAL_JSHandleEvent(
    {
       if (g_fStickActive)
       {
-         double dx = mx - g_dJSCX;
-         double dy = my - g_dJSCY;
-         double mag = sqrt(dx * dx + dy * dy);
+         double cx = (g_dJSScreenW > 0.0) ? g_dJSScreenW * 0.5 : mx;
+         double cy = (g_dJSScreenH > 0.0) ? g_dJSScreenH * 0.5 : my;
 
-         if (mag > g_dJSR)
-         {
-            dx = dx * g_dJSR / mag;
-            dy = dy * g_dJSR / mag;
-         }
-         g_dStickDX = dx;
-         g_dStickDY = dy;
-         PAL_JSApplyDirection(dx, dy);
+         g_dStickTouchX = mx;
+         g_dStickTouchY = my;
+         PAL_JSApplyDirection(mx - cx, my - cy);
          return TRUE;
       }
       return FALSE;
@@ -499,6 +501,10 @@ def main():
             'extern double g_dJSR;\n'
             'extern double g_dJSTexScaleX;\n'
             'extern double g_dJSTexScaleY;\n'
+            'extern double g_dJSScreenW;\n'
+            'extern double g_dJSScreenH;\n'
+            'extern double g_dStickTouchX;\n'
+            'extern double g_dStickTouchY;\n'
             'extern double g_dJSBtn[4][3];\n'
             'extern BOOL   g_fJSLayoutReady;\n'
         )

@@ -179,6 +179,10 @@ PAL_JS_DrawHudPixels(
       g_dJSTexScaleY = (double)texH / (double)winH;
    }
 
+   /* 触摸逻辑的屏幕尺寸（与换算后的触摸坐标同一空间） */
+   g_dJSScreenW = (double)texW;
+   g_dJSScreenH = (double)texH;
+
    /* 布局用窗口坐标算（v15 已验证可行），绘制时再缩放到纹理空间 */
    if (!g_fJSLayoutReady && winW > 0 && winH > 0)
    {
@@ -193,18 +197,16 @@ PAL_JS_DrawHudPixels(
 
    {
       double s  = (winW > 0) ? ((double)texW / (double)winW) : 1.0;
-      double cx = g_dJSCX * s;
-      double cy = g_dJSCY * s;
-      double rr = g_dJSR * s;
       double kx2, ky2;
 
-      /* 摇杆：无填充 + 较亮的细白环，同暗黑2 */
-      JS_Ring(buf, pitch, texW, texH, cx, cy, rr, rr * 0.045 + 0.9, 255, 255, 255, 150);
-
-      /* 摇杆头：小半透明白点 */
-      kx2 = cx + (g_fStickActive ? g_dStickDX * s : 0.0);
-      ky2 = cy + (g_fStickActive ? g_dStickDY * s : 0.0);
-      JS_Disc(buf, pitch, texW, texH, kx2, ky2, rr * 0.30, 255, 255, 255, 120);
+      /* 全屏摇杆：不画大圆，只在手指处画一个小点 */
+      if (g_fStickActive)
+      {
+         kx2 = g_dStickTouchX;
+         ky2 = g_dStickTouchY;
+         JS_Disc(buf, pitch, texW, texH, kx2, ky2, g_dJSScreenH * 0.020, 255, 255, 255, 110);
+         JS_Ring(buf, pitch, texW, texH, kx2, ky2, g_dJSScreenH * 0.030, 1.5, 255, 255, 255, 90);
+      }
 
       /* 按钮：无填充 + 细白环；按下才出现淡淡的底 */
       for (i = 0; i < 4; i++)
@@ -213,7 +215,7 @@ PAL_JS_DrawHudPixels(
          double by = g_dJSBtn[i][1] * s;
          double br = g_dJSBtn[i][2] * s;
          int    aF = (g_iPressedButton == i) ? 55 : 0;
-         int    aR = (g_iPressedButton == i) ? 200 : 150;
+         int    aR = (g_iPressedButton == i) ? 200 : 120;
 
          if (aF > 0)
          {
@@ -223,12 +225,10 @@ PAL_JS_DrawHudPixels(
 
          if (i == 1 && br > 5.0)
          {
-            JS_Hamburger(buf, pitch, texW, texH, bx, by, br, 255, 255, 255, 150);
+            JS_Hamburger(buf, pitch, texW, texH, bx, by, br, 255, 255, 255, 130);
          }
       }
    }
-   (void)kx;
-   (void)ky;
 }
 /* ===== end pixel joystick overlay ===== */
 '''
