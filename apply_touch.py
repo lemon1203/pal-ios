@@ -331,9 +331,20 @@ PAL_JS_DrawOverlay(
    {
       int w = 0, h = 0;
 
-      if (SDL_GetRendererOutputSize(gpRenderer, &w, &h) == 0 && w > 0 && h > 0)
+      /* SDL2 成功返回 0，SDL3 成功返回非 0：只看尺寸，不看返回值 */
+      (VOID)SDL_GetRendererOutputSize(gpRenderer, &w, &h);
+
+      if (w > 0 && h > 0)
       {
          PAL_GetTouchLayout(w, h, &g_dJSCX, &g_dJSCY, &g_dJSR, g_dJSBtn);
+         g_fJSLayoutReady = TRUE;
+      }
+      else if (gOverlayRect.w > 0 && gOverlayRect.h > 0)
+      {
+         int nMax = (gOverlayRect.w > gOverlayRect.h) ? gOverlayRect.w : gOverlayRect.h;
+
+         PAL_GetTouchLayout(nMax * 16 / 9, nMax,
+                            &g_dJSCX, &g_dJSCY, &g_dJSR, g_dJSBtn);
          g_fJSLayoutReady = TRUE;
       }
    }
