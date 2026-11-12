@@ -181,57 +181,72 @@ PAL_CheatInputNumber(
    int      nDigits = 0;
    char     szDigits[16] = { 0 };
    WCHAR    szW[64];
-   const SDL_Rect rect = { 56, 20, 210, 160 };
+   BOOL     fDirty = TRUE;
+   BOOL     fDone = FALSE;
+   BOOL     fOK = FALSE;
+   LPBOX    lpBox = NULL;
+   const SDL_Rect rect = { 54, 18, 214, 164 };
 
    for (i = 0; i < 16; i++) szDigits[i] = 0;
 
-   while (TRUE)
+   while (!fDone)
    {
-      PAL_ClearKeyState();
-
-      PAL_CreateBox(PAL_XY(56, 20), 10, 13, 0, TRUE);
-
-      // 提示（Big5 中文）
-      PAL_DrawText(g_rgCheatWide[iPromptSlot], PAL_XY(68, 30), MENUITEM_COLOR, TRUE, TRUE, FALSE);
-
-      // 当前输入值
-      PAL_CheatAsciiToW(szW, (nDigits > 0) ? szDigits : "0");
-      PAL_DrawText(szW, PAL_XY(190, 30), MENUITEM_COLOR_SELECTED, TRUE, TRUE, FALSE);
-
-      // 键盘
-      for (r = 0; r < 4; r++)
+      //
+      // Redraw only when something changed, to avoid flickering.
+      //
+      if (fDirty)
       {
-         for (c = 0; c < 3; c++)
+         if (lpBox != NULL)
          {
-            BYTE bColor = (iCursor == r * 3 + c) ? MENUITEM_COLOR_SELECTED : MENUITEM_COLOR;
-            PAL_CheatAsciiToW(szW, g_rgCheatPad[r][c]);
-            PAL_DrawText(szW, PAL_XY(84 + c * 50, 58 + r * 24), bColor, TRUE, TRUE, FALSE);
+            PAL_DeleteBox(lpBox);
          }
+         lpBox = PAL_CreateBox(PAL_XY(56, 20), 10, 13, 0, TRUE);
+
+         PAL_DrawText(g_rgCheatWide[iPromptSlot], PAL_XY(68, 30), MENUITEM_COLOR, TRUE, TRUE, FALSE);
+
+         PAL_CheatAsciiToW(szW, (nDigits > 0) ? szDigits : "0");
+         PAL_DrawText(szW, PAL_XY(190, 30), MENUITEM_COLOR_SELECTED, TRUE, TRUE, FALSE);
+
+         for (r = 0; r < 4; r++)
+         {
+            for (c = 0; c < 3; c++)
+            {
+               BYTE bColor = (iCursor == r * 3 + c) ? MENUITEM_COLOR_SELECTED : MENUITEM_COLOR;
+               PAL_CheatAsciiToW(szW, g_rgCheatPad[r][c]);
+               PAL_DrawText(szW, PAL_XY(84 + c * 50, 58 + r * 24), bColor, TRUE, TRUE, FALSE);
+            }
+         }
+
+         VIDEO_UpdateScreen(&rect);
+         fDirty = FALSE;
       }
 
-      VIDEO_UpdateScreen(&rect);
-
+      PAL_ClearKeyState();
       PAL_ProcessEvent();
 
       if (g_InputState.dwKeyPress & kKeyMenu)
       {
-         return FALSE;
+         fDone = TRUE;
+         break;
       }
+
       if (g_InputState.dwKeyPress & kKeyUp)
       {
          iCursor = (iCursor + 9) % 12;
+         fDirty = TRUE;
       }
       if (g_InputState.dwKeyPress & kKeyDown)
       {
          iCursor = (iCursor + 3) % 12;
+         fDirty = TRUE;
       }
       if (g_InputState.dwKeyPress & kKeyLeft)
       {
-         if (iCursor % 3 != 0) iCursor--;
+         if (iCursor % 3 != 0) { iCursor--; fDirty = TRUE; }
       }
       if (g_InputState.dwKeyPress & kKeyRight)
       {
-         if (iCursor % 3 != 2) iCursor++;
+         if (iCursor % 3 != 2) { iCursor++; fDirty = TRUE; }
       }
 
       if (g_InputState.dwKeyPress & (kKeySearch | kKeyForce))
@@ -244,6 +259,7 @@ PAL_CheatInputNumber(
             {
                szDigits[nDigits++] = k[0];
                szDigits[nDigits] = 0;
+               fDirty = TRUE;
             }
          }
          else if (k[0] == '<')
@@ -251,18 +267,27 @@ PAL_CheatInputNumber(
             if (nDigits > 0)
             {
                szDigits[--nDigits] = 0;
+               fDirty = TRUE;
             }
          }
          else
          {
-            // OK
             *pdwResult = (DWORD)atoi(szDigits);
-            return TRUE;
+            fOK = TRUE;
+            fDone = TRUE;
          }
       }
 
-      UTIL_Delay(40);
+      UTIL_Delay(16);
    }
+
+   if (lpBox != NULL)
+   {
+      PAL_DeleteBox(lpBox);
+   }
+   VIDEO_UpdateScreen(&rect);
+
+   return fOK;
 }
 
 //
