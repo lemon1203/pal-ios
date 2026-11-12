@@ -54,19 +54,24 @@ PAL_GetTouchLayout(
 {
    double dH = (double)iHeight;
    double dW = (double)iWidth;
-   double dR = dH * 0.155;
-   double dBtnR = dH * 0.072;
-   double dMarginX = dBtnR * 1.7;
-   double dMarginY = dBtnR * 1.7;
+   double dR = dH * 0.170;
+   double dBig = dH * 0.095;
+   double dSmall = dH * 0.070;
+   double dTiny = dH * 0.058;
+   double ax, ay;
 
    if (pdStickR)  *pdStickR  = dR;
-   if (pdStickCX) *pdStickCX = dR * 1.35;
-   if (pdStickCY) *pdStickCY = dH - dR * 1.35;
+   if (pdStickCX) *pdStickCX = dR * 1.22;
+   if (pdStickCY) *pdStickCY = dH - dR * 1.22;
 
-   rgBtn[0][0] = dW - dMarginX;               rgBtn[0][1] = dH - dMarginY;               rgBtn[0][2] = dBtnR;
-   rgBtn[1][0] = dW - dMarginX - dBtnR * 2.6; rgBtn[1][1] = dH - dMarginY;               rgBtn[1][2] = dBtnR;
-   rgBtn[2][0] = dW - dMarginX;               rgBtn[2][1] = dH - dMarginY - dBtnR * 2.6; rgBtn[2][2] = dBtnR;
-   rgBtn[3][0] = dW - dMarginX - dBtnR * 2.6; rgBtn[3][1] = dH - dMarginY - dBtnR * 2.6; rgBtn[3][2] = dBtnR;
+   /* 主按钮走暗黑2 的右下角布局：一个大键 + 三个环绕小键 */
+   ax = dW - dH * 0.135;
+   ay = dH - dH * 0.135;
+
+   rgBtn[0][0] = ax;                        rgBtn[0][1] = ay;                        rgBtn[0][2] = dBig;
+   rgBtn[1][0] = ax - dH * 0.215;           rgBtn[1][1] = ay - dH * 0.010;           rgBtn[1][2] = dSmall;
+   rgBtn[2][0] = ax - dH * 0.020;           rgBtn[2][1] = ay - dH * 0.205;           rgBtn[2][2] = dSmall;
+   rgBtn[3][0] = ax - dH * 0.200;           rgBtn[3][1] = ay - dH * 0.175;           rgBtn[3][2] = dTiny;
 }
 
 static VOID
@@ -256,6 +261,7 @@ VIDEO_CODE = r'''
 static SDL_Texture *gpJSBaseTex = NULL;
 static SDL_Texture *gpJSKnobTex = NULL;
 static SDL_Texture *gpJSBtnTex  = NULL;
+static SDL_Texture *gpJSRingTex = NULL;
 static BOOL         g_fJSOverlayReady = FALSE;
 
 static SDL_Texture *
@@ -290,7 +296,7 @@ PAL_JS_MakeCircle(
          double dx = (x - iSize / 2.0) / (iSize / 2.0);
          double dy = (y - iSize / 2.0) / (iSize / 2.0);
          double d  = sqrt(dx * dx + dy * dy);
-         BOOL   fSet = fFilled ? (d <= 0.98) : (d <= 1.0 && d >= 0.62);
+         BOOL   fSet = fFilled ? (d <= 0.97) : (d <= 1.0 && d >= 0.90);
 
          if (fSet)
          {
@@ -339,18 +345,20 @@ PAL_JS_DrawOverlay(
 
    if (!g_fJSOverlayReady)
    {
-      gpJSBaseTex = PAL_JS_MakeCircle(256, 255, 255, 255, 165, FALSE);
-      gpJSKnobTex = PAL_JS_MakeCircle(128, 255, 255, 255, 215, TRUE);
-      gpJSBtnTex  = PAL_JS_MakeCircle(128, 255, 255, 255, 175, FALSE);
+      gpJSBaseTex = PAL_JS_MakeCircle(256,   0,   0,   0,  70, TRUE);   /* 摇杆底盘：深色半透明 */
+      gpJSRingTex = PAL_JS_MakeCircle(256, 255, 255, 255, 190, FALSE);  /* 细白环 */
+      gpJSKnobTex = PAL_JS_MakeCircle(128, 255, 255, 255, 200, TRUE);   /* 摇杆头：小白点 */
+      gpJSBtnTex  = PAL_JS_MakeCircle(128,   0,   0,   0, 110, TRUE);   /* 按钮：深色圆盘 */
       g_fJSOverlayReady = TRUE;
    }
 
-   // 摇杆底座
+   /* 摇杆底盘（深色填充 + 细白环，同暗黑2 风格） */
    dst.w = (int)(g_dJSR * 2.0);
    dst.h = (int)(g_dJSR * 2.0);
    dst.x = (int)(g_dJSCX - g_dJSR);
    dst.y = (int)(g_dJSCY - g_dJSR);
    if (gpJSBaseTex) SDL_RenderCopy(gpRenderer, gpJSBaseTex, NULL, &dst);
+   if (gpJSRingTex) SDL_RenderCopy(gpRenderer, gpJSRingTex, NULL, &dst);
 
    // 摇杆头
    {
@@ -377,11 +385,17 @@ PAL_JS_DrawOverlay(
 
       if (gpJSBtnTex)
       {
-         SDL_SetTextureAlphaMod(gpJSBtnTex, (g_iPressedButton == i) ? 230 : 110);
+         SDL_SetTextureAlphaMod(gpJSBtnTex, (g_iPressedButton == i) ? 200 : 110);
          SDL_RenderCopy(gpRenderer, gpJSBtnTex, NULL, &dst);
+      }
+      if (gpJSRingTex)
+      {
+         SDL_SetTextureAlphaMod(gpJSRingTex, (g_iPressedButton == i) ? 255 : 190);
+         SDL_RenderCopy(gpRenderer, gpJSRingTex, NULL, &dst);
       }
    }
    if (gpJSBtnTex) SDL_SetTextureAlphaMod(gpJSBtnTex, 110);
+   if (gpJSRingTex) SDL_SetTextureAlphaMod(gpJSRingTex, 190);
 }
 /* ===== end joystick overlay ===== */
 '''
