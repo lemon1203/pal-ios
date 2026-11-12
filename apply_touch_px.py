@@ -273,6 +273,17 @@ def main():
     )
     text = text[:line_start] + insert + text[line_start:]
 
+    # 函数定义在 VIDEO_RenderCopy 之后，前面必须有声明
+    proto = (
+        '/* pixel joystick overlay prototype (patched) */\n'
+        'void PAL_JS_DrawHudPixels(Uint8 *buf, int pitch, int texW, int texH, int winW, int winH);\n\n'
+    )
+    anchor_rc = 'VOID\nVIDEO_RenderCopy('
+    ridx = text.find(anchor_rc)
+    if ridx < 0:
+        raise SystemExit('video.c: 找不到 VIDEO_RenderCopy 定义')
+    text = text[:ridx] + proto + text[ridx:]
+
     with io.open(path, 'w', encoding='utf-8', newline='\n', errors='surrogateescape') as f:
         f.write(text)
 
