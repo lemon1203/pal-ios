@@ -38,6 +38,14 @@ jobs:
           grep -n "g_fCheatWalkThrough" sdlpal/map.c | head -3
           grep -n "g_fCheatNoEncounter" sdlpal/battle.c | head -3
 
+      - name: 打摇杆触屏补丁
+        run: |
+          python3 patcher/apply_touch.py sdlpal
+          echo "---- 验证触屏补丁 ----"
+          grep -n "PAL_JSHandleEvent" sdlpal/input.c | head -3
+          grep -n "PAL_JS_DrawOverlay" sdlpal/video.c | head -3
+          grep -n "PAL_GetTouchLayout" sdlpal/input.h | head -3
+
       - name: 显示工具链版本
         run: |
           xcodebuild -version
